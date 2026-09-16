@@ -3,11 +3,15 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "Chapter-production workflow (Checkpoint 5): Postgres-checkpointed idempotent steps from intake to accepted export, with the Chapter 2 proof that chapter k remembers chapter k−1. Temporal orchestration is deferred (ADR-0044).",
+  "description": "Chapter-production workflow (Checkpoint 5): Postgres-checkpointed idempotent steps from intake to accepted export, with the Chapter 2 proof that chapter k remembers chapter k\u22121. Temporal orchestration is deferred (ADR-0044).",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./testkit": {
+      "types": "./dist/testkit.d.ts",
+      "default": "./dist/testkit.js"
     }
   },
   "files": [

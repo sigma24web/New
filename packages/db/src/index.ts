@@ -5,3 +5,6 @@ export * from './audit.js';
 export * from './retrieval.js';
 export * from './workflow.js';
 export * from './selection.js';
+export * from './identity.js';
+export * from './job-control.js';
+export * from './leases.js';

@@ -52,6 +52,12 @@ jobs:
           CI: 'true'
       - name: Integration tests actually ran (DATABASE_URL present)
         run: test -n "$DATABASE_URL"
+      - name: Durable orchestration tests actually ran (worker + Temporal test server)
+        # The worker suite runs against Temporal's locally downloaded time-skipping test server, so a
+        # silent skip would hide the only proof of restart/replay/duplicate-start behaviour.
+        run: |
+          grep -q "durable orchestration" coverage/junit.xml || {
+            echo "::error::apps/worker orchestration tests did not run"; exit 1; }
       - name: Deterministic contrast regression (no credentials, no provider calls)
         run: pnpm validate:contrast
       - name: CLI smoke against the migrated database
@@ -59,8 +65,36 @@ jobs:
           pnpm --silent cli db:migrate
           pnpm --silent cli project:create "ci smoke" > /tmp/p.json
           cat /tmp/p.json
-      - name: Dependency audit (report; high+ fails)
-        run: pnpm audit --audit-level=high || (echo "::warning::pnpm audit reported findings" && exit 0)
+      - name: API startup smoke test
+        run: |
+          pnpm --filter @yeonjae/api start &
+          API_PID=$!
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8080/health > /tmp/health.json; then break; fi
+            sleep 1
+          done
+          cat /tmp/health.json
+          curl -fsS http://127.0.0.1:8080/ready
+          # An unauthenticated protected route must answer 401 with a problem document, not data.
+          code=$(curl -s -o /tmp/unauth.json -w '%{http_code}' http://127.0.0.1:8080/v1/projects)
+          test "$code" = "401" || { echo "::error::unauthenticated /v1/projects returned $code"; exit 1; }
+          kill $API_PID
+        env:
+          YEONJAE_INSECURE_COOKIES: 'true'
+      - name: Worker startup smoke test (refuses to start without an explicit provider mode)
+        run: |
+          # No YEONJAE_PROVIDER_MODE: the worker must refuse rather than defaulting to a paid provider.
+          if pnpm --filter @yeonjae/worker start 2>/tmp/worker.err; then
+            echo "::error::worker started without YEONJAE_PROVIDER_MODE"; exit 1
+          fi
+          grep -q "YEONJAE_PROVIDER_MODE" /tmp/worker.err || {
+            echo "::error::worker failure did not name the missing provider mode"; cat /tmp/worker.err; exit 1; }
+      - name: Dependency audit (high and critical advisories fail the build)
+        # The previous form ended in `|| (echo ... && exit 0)`, so despite its name it converted every
+        # finding into a success and the gate never existed. High/critical advisories now fail. A finding
+        # that must be tolerated goes in .audit-allowlist.json with a justification, scope and expiry, so
+        # the exception is reviewable and cannot outlive its review.
+        run: node tools/audit-gate.mjs
 
   secrets:
     name: Secret scanning (gitleaks)

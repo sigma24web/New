@@ -4,6 +4,8 @@
 
 - Node 22 LTS (`.nvmrc`), pnpm 10 (`corepack enable` or `npm i -g pnpm@10`)
 - Python 3.12 with `jsonschema` for the planning validator (`pip install jsonschema`)
+- Temporal (optional locally; the test suite downloads and runs the time-skipping test server itself, so no
+  server and no credentials are needed for `pnpm test`)
 - Postgres 16 with `btree_gist` (bundled) — `DATABASE_URL=postgres://user:pass@127.0.0.1:5432/yeonjae_test`; integration tests skip (visibly) when it is unset
 
 ## Commands
@@ -43,7 +45,21 @@ pnpm cli export:accepted <projectId>                # accepted chapter 1 summary
 ## Layout (ADR-0021, ADR-0044)
 
 ```
-apps/cli            operator surface for the core loop (first app; API/web/worker come in Checkpoint 7)
+apps/cli            operator surface for the core loop (first app, ADR-0044)
+apps/worker         Checkpoint 7 durable orchestration (ADR-0047): a Temporal worker whose workflow
+                    acquires a fenced target lease, observes the operator's pause/cancel intent at
+                    checkpoint boundaries, runs packages/workflows' produceChapter as ONE durable
+                    activity (which keeps its own Postgres step checkpoints, so a restart replays and
+                    re-spends nothing), settles the terminal job state and releases the lease.
+                    Versioned, prose-free activity contracts; retries classified by failure meaning;
+                    replay-only provider routing — it refuses to start without YEONJAE_PROVIDER_MODE
+apps/api            Checkpoint 7 Fastify /v1 operator API: session/API-key auth, membership-derived
+                    authorization, RLS-scoped requests, RFC 9457 problem details, Idempotency-Key,
+                    cursor pagination, security headers, health/readiness, audit log. A thin adapter
+                    over packages/* — it holds no canon, selection or workflow logic of its own.
+                    Adds job control (pause/resume/cancel), replayable SSE job events and accepted-only
+                    TXT/DOCX export with authorized download.
+                    (apps/web remains outstanding Checkpoint 7 scope.)
 packages/prose      NFC boundary, code-point addressing, evidence verification, paragraphs, length model,
                     deterministic output-language check
 packages/domain     schema loader + Ajv validators, generated types, UUIDv7, StoryClock ordering,
@@ -53,7 +69,10 @@ packages/gateway    fail-closed Narrative Identity Guard, routing table, budget 
                     MockProvider (fault injection) and ReplayProvider (no silent live calls)
 packages/db         migrations (forward-only, hashed; 0004 = jobs workflow_id/idempotency/pins, workflow_artifacts,
                     context packs, embedding sets; 0005 = candidate_selections, the durable N-candidate decision
-                    whose row and loser transitions commit in one transaction), pool/transaction helpers,
+                    whose row and loser transitions commit in one transaction; 0006 = users/workspace_members/
+                    sessions/api_keys, row-level security on every workspace-owned table plus the non-superuser
+                    role yeonjae_app the application runs as, api_idempotency_keys, job control columns, the
+                    append-only job_events log and exports), identity/session helpers, pool/transaction helpers,
                     typed repository over the canon
                     schema; canon.commit_delta / canon.rollback_latest are the only canon write paths;
                     retrieval.ts = accepted-only reads for context assembly

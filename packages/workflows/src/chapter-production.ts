@@ -14,6 +14,8 @@
 import { createHash } from 'node:crypto';
 import {
   acceptedChapter,
+  finishJob,
+  JobControlStop,
   ensureJob,
   ensurePromptSet,
   getJobByWorkflowId,
@@ -65,6 +67,7 @@ import { patchRegression, regressionArtifact, regressionReportId } from './compa
 import { pickRevisionDimension, reviseVersion } from './revision.js';
 import {
   saveArtifact,
+  type HeldLease,
   type StepTrace,
   type WorkflowContext,
   type WorkflowPins,
@@ -83,6 +86,12 @@ export interface ChapterProductionInput {
   readonly failAfterStep?: string | undefined;
   /** `contract_and_pack` stops after the locked contract and the scene_writer pack (the Chapter 2 proof). */
   readonly stage?: 'full' | 'contract_and_pack' | undefined;
+  /**
+   * The target lease this run holds, when it runs under the durable orchestrator. Passed through to the
+   * workflow context so every `runStep` boundary re-verifies ownership and a fenced-out worker stops
+   * before its next durable side effect. Absent for the single-operator CLI path, which has no rival.
+   */
+  readonly lease?: HeldLease | undefined;
 }
 
 export interface ChapterProductionDeps {
@@ -189,6 +198,7 @@ export async function makeContext(
   deps: ChapterProductionDeps,
   projectId: string,
   chapterNo: number,
+  lease?: HeldLease,
 ): Promise<{ ctx: WorkflowContext; mainTimelineId: string; identity: ComposedIdentity }> {
   const project = await getProject(deps.pool, projectId);
   const registry = deps.registry ?? PromptRegistry.fromDirectory();
@@ -311,6 +321,7 @@ export async function makeContext(
     pins,
     trace: [],
     bindings,
+    ...(lease ? { lease } : {}),
   };
   return { ctx, mainTimelineId: main.id, identity };
 }
@@ -321,7 +332,12 @@ export async function produceChapter(
   input: ChapterProductionInput,
 ): Promise<ChapterProductionResult> {
   const intake = validateIntake(input.intake);
-  const { ctx, mainTimelineId } = await makeContext(deps, input.projectId, input.chapterNo);
+  const { ctx, mainTimelineId } = await makeContext(
+    deps,
+    input.projectId,
+    input.chapterNo,
+    input.lease,
+  );
   const specVersion = input.specVersion ?? 1;
   const chapterNo = input.chapterNo;
   const versions: ManuscriptVersionRow[] = [];
@@ -581,6 +597,14 @@ export async function produceChapter(
     }
     const edges = await persistDependencyEdges(ctx, { versionId: current.id, packs: usedPacks });
 
+    // A terminal job event, emitted exactly once (finishJob is idempotent about it). Without this a
+    // completed run left an SSE stream open forever: the client had no terminal frame and could not
+    // distinguish "finished" from "idle", and the job's own history had no closing record.
+    await finishJob(ctx.pool, {
+      jobId: ctx.job.id,
+      status: 'completed',
+      payload: { chapter_no: chapterNo, canon_version: accepted.canon_version },
+    });
     await updateJob(ctx.pool, ctx.job.id, {
       status: 'completed',
       currentStep: null,
@@ -629,6 +653,10 @@ export async function produceChapter(
       status: 'completed',
     };
   } catch (err) {
+    // A control stop is not a failure. `checkpointControl` has already settled the job as paused or
+    // cancelled and emitted its event; overwriting that with `failed` here would make the persisted job,
+    // its terminal event and the operator's own request disagree.
+    if (err instanceof JobControlStop) throw err;
     const wf =
       err instanceof WorkflowError
         ? err
@@ -849,4 +877,4 @@ export async function exportAccepted(
   };
 }
 
-export type { ArcPlan, ChapterContract, StoryBible, StoryIntake, StorySpec };
+export type { ArcPlan, ChapterContract, StoryBible, StoryIntake, StorySpec, HeldLease };

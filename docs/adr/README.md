@@ -4,7 +4,7 @@
 | --- | --- |
 | [0001](0001-typescript-monorepo-with-python-nlp-sidecar.md) | TypeScript monorepo (optional English grammar service) |
 | [0002](0002-postgres-single-system-of-record.md) | Postgres 16 + pgvector as the single system of record |
-| [0003](0003-temporal-for-durable-workflows.md) | Temporal for durable, resumable workflows — *staged after the MVP core loop by 0044* |
+| [0003](0003-temporal-for-durable-workflows.md) | Temporal for durable, resumable workflows — *staged after the MVP core loop by 0044; adopted at Checkpoint 7 with the orchestration granularity set by 0047* |
 | [0004](0004-provider-independent-model-gateway.md) | Provider-independent model gateway with role-based routing |
 | [0005](0005-fail-closed-style-guard.md) | Fail-closed guard on every style-sensitive call — *superseded by 0027* |
 | [0006](0006-bitemporal-facts-with-evidence.md) | Bitemporal facts with mandatory evidence spans |
@@ -48,6 +48,7 @@
 | [0044](0044-modular-monolith-first.md) | Modular monolith first; Temporal and the web app after the core loop is proven |
 | [0045](0045-context-pack-retrieval-implementation.md) | Context packs are pure functions of pinned inputs; lexical retrieval is synchronous and accepted-only (SQL-enforced); vector retrieval is an interface until an embedder exists |
 | [0046](0046-chapter-production-implementation.md) | Chapter-production implementation: previous-chapter gate before spend, replay activity-id binding, global canon identity with per-test DB isolation |
+| [0047](0047-temporal-adapter-over-checkpointed-steps.md) | Temporal orchestrates the proven chapter loop as one durable activity over its Postgres checkpoints, not as decomposed activities |
 
 New ADRs: copy `0000-adr-template.md`, take the next number, link it here, and update the traceability
 matrix in the same change.

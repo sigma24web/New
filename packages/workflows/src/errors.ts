@@ -33,6 +33,10 @@ export type WorkflowErrorCode =
   | 'CHAPTER_NOT_ACCEPTED'
   | 'WORKFLOW_NOT_FOUND'
   | 'STEP_NONDETERMINISTIC'
+  // The run lost its target lease (expired or fenced out by a newer holder). Distinct from
+  // CONCURRENT_CALL, which is a transient contention the caller may retry: LEASE_LOST means another worker
+  // now owns the target, so this run must stop rather than race it.
+  | 'LEASE_LOST'
   | 'INTERNAL';
 
 export type RecommendedAction =
@@ -52,6 +56,11 @@ export class WorkflowError extends Error {
       readonly step?: string | undefined;
       readonly data?: Readonly<Record<string, unknown>> | undefined;
       readonly recommendedActions?: readonly RecommendedAction[] | undefined;
+      /**
+       * True when retrying the same step may succeed (a transient fault). False/absent means the failure
+       * is deterministic and a retry would only burn budget while delaying the operator's decision.
+       */
+      readonly retriable?: boolean | undefined;
       readonly cause?: unknown;
     } = {},
   ) {
@@ -66,6 +75,7 @@ export class WorkflowError extends Error {
       step: this.options.step,
       data: this.options.data,
       recommended_actions: this.options.recommendedActions ?? [],
+      retriable: this.options.retriable ?? false,
     };
   }
 }

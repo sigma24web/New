@@ -1,0 +1,24 @@
+{
+  "name": "@yeonjae/api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Yeonjae Studio operator REST API (Checkpoint 7): versioned /v1 surface over the proven domain services.",
+  "scripts": {
+    "build": "tsc -b",
+    "start": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "@yeonjae/canon": "workspace:*",
+    "@yeonjae/context": "workspace:*",
+    "@yeonjae/db": "workspace:*",
+    "@yeonjae/domain": "workspace:*",
+    "@yeonjae/gateway": "workspace:*",
+    "@yeonjae/narrative": "workspace:*",
+    "@yeonjae/prompts": "workspace:*",
+    "@yeonjae/prose": "workspace:*",
+    "@yeonjae/workflows": "workspace:*",
+    "docx": "^9.7.1",
+    "fastify": "^5.12.4"
+  }
+}
